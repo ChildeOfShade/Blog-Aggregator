@@ -3,8 +3,12 @@ package main
 import (
     "context"
     "database/sql"
+    "encoding/xml"
     "fmt"
+    "html"
+    "io"
     "log"
+    "net/http"
     "os"
     "time"
 
@@ -14,6 +18,7 @@ import (
     "gator/internal/config"
     "gator/internal/database"
 )
+
 
 type state struct {
     db  *database.Queries
@@ -132,7 +137,8 @@ func main() {
     cmds.register("login", handlerLogin)
     cmds.register("register", handlerRegister)
     cmds.register("reset", handlerReset)
-
+    cmds.register("users", handlerUsers)
+    cmds.register("agg", handlerAgg)
 
     // Parse CLI args
     if len(os.Args) < 2 {
@@ -161,5 +167,77 @@ func handlerReset(s *state, cmd command) error {
         return err
     }
     fmt.Println("database successfully reset")
+    return nil
+}
+
+//
+// USERS HANDLER
+//
+func handlerUsers(s *state, cmd command) error {
+    users, err := s.db.GetUsers(context.Background())
+    if err != nil {
+        return fmt.Errorf("failed to list users: %w", err)
+    }
+
+    current := s.cfg.CurrentUserName
+
+    for _, u := range users {
+        if u.Name == current {
+            fmt.Printf("* %s (current)\n", u.Name)
+        } else {
+            fmt.Printf("* %s\n", u.Name)
+        }
+    }
+
+    return nil
+}
+
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "gator")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var feed RSSFeed
+	if err := xml.Unmarshal(body, &feed); err != nil {
+		return nil, err
+	}
+
+	// Unescape top-level fields
+	feed.Channel.Title = html.UnescapeString(feed.Channel.Title)
+	feed.Channel.Description = html.UnescapeString(feed.Channel.Description)
+
+	// Unescape each item
+	for i := range feed.Channel.Items {
+		feed.Channel.Items[i].Title = html.UnescapeString(feed.Channel.Items[i].Title)
+		feed.Channel.Items[i].Description = html.UnescapeString(feed.Channel.Items[i].Description)
+	}
+
+	return &feed, nil
+}
+
+func handlerAgg(s *state, cmd command) error {
+    ctx := context.Background()
+
+    feed, err := fetchFeed(ctx, "https://www.wagslane.dev/index.xml")
+    if err != nil {
+        return err
+    }
+
+    // Print entire struct (Boot.dev expects this)
+    fmt.Printf("%+v\n", feed)
     return nil
 }
