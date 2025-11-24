@@ -140,7 +140,7 @@ func main() {
     cmds.register("users", handlerUsers)
     cmds.register("agg", handlerAgg)
     cmds.register("addfeed", handlerAddFeed)
-
+    cmds.register("feeds", handlerFeeds)
 
     // Parse CLI args
     if len(os.Args) < 2 {
@@ -273,6 +273,27 @@ func handlerAddFeed(s *state, cmd command) error {
     fmt.Printf("Name: %s\n", feed.Name)
     fmt.Printf("URL: %s\n", feed.Url)
     fmt.Printf("UserID: %s\n", feed.UserID)
+
+    return nil
+}
+
+func handlerFeeds(s *state, cmd command) error {
+    feeds, err := s.db.ListFeeds(context.Background())
+    if err != nil {
+        return fmt.Errorf("failed to list feeds: %w", err)
+    }
+
+    if len(feeds) == 0 {
+        fmt.Println("No feeds found.")
+        return nil
+    }
+
+    for _, f := range feeds {
+        fmt.Printf("Feed: %s\n", f.Name)
+        fmt.Printf("URL: %s\n", f.Url)
+        fmt.Printf("User: %s\n", f.Username)
+        fmt.Println("------")
+    }
 
     return nil
 }
