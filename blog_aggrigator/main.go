@@ -139,6 +139,8 @@ func main() {
     cmds.register("reset", handlerReset)
     cmds.register("users", handlerUsers)
     cmds.register("agg", handlerAgg)
+    cmds.register("addfeed", handlerAddFeed)
+
 
     // Parse CLI args
     if len(os.Args) < 2 {
@@ -239,5 +241,38 @@ func handlerAgg(s *state, cmd command) error {
 
     // Print entire struct (Boot.dev expects this)
     fmt.Printf("%+v\n", feed)
+    return nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+    if len(cmd.args) != 2 {
+        return fmt.Errorf("usage: addfeed <name> <url>")
+    }
+
+    name := cmd.args[0]
+    url := cmd.args[1]
+
+    // Get current user
+    user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+    if err != nil {
+        return fmt.Errorf("must be logged in: %w", err)
+    }
+
+    feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
+        ID:     uuid.New(),
+        Name:   name,
+        Url:    url,
+        UserID: user.ID,
+    })
+    if err != nil {
+        return err
+    }
+
+    fmt.Printf("Feed created:\n")
+    fmt.Printf("ID: %s\n", feed.ID)
+    fmt.Printf("Name: %s\n", feed.Name)
+    fmt.Printf("URL: %s\n", feed.Url)
+    fmt.Printf("UserID: %s\n", feed.UserID)
+
     return nil
 }
